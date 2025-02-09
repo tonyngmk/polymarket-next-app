@@ -16,7 +16,24 @@ async function fetchAllMarkets() {
   while (true) {
     console.log(`Fetching page ${page} (offset: ${offset})...`);
     
-    const response = await fetch(`${BASE_POLYMARKET_API}?closed=False&offset=${offset}`, {
+    // Calculate end date (5 days from today)
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 5);
+    const formattedEndDate = endDate.toISOString().split('T')[0];
+
+    // Configure API query parameters
+    const queryParams = new URLSearchParams({
+      closed: 'false',
+      active: 'true',
+      order: 'endDate',
+      ascending: 'false',
+      end_date_max: formattedEndDate,
+      liquidity_min: '10000',
+      volume_min: '10000',
+      offset: offset.toString()
+    });
+
+    const response = await fetch(`${BASE_POLYMARKET_API}?${queryParams}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
