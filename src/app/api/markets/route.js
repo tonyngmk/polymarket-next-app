@@ -40,8 +40,8 @@ async function fetchAllMarkets() {
     offset += limit;
     page += 1;
 
-    // Add 1 second delay before next request
-    await delay(1000);
+    // Add 0.1 second delay before next request
+    await delay(100);
   }
 
   return allData;
