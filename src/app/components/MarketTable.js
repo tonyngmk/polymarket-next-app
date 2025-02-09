@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 export default function MarketTable() {
   const [markets, setMarkets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
   const [sortConfig, setSortConfig] = useState({
     key: null,
     direction: 'desc'
@@ -44,52 +46,66 @@ export default function MarketTable() {
     setMarkets(sortData(markets, key, direction));
   };
 
-  useEffect(() => {
-    const fetchMarkets = async () => {
-      try {
-        const response = await fetch('/api/markets');
-        if (!response.ok) {
-          throw new Error('Failed to fetch market data');
-        }
-        const data = await response.json();
-        
-        // Process and flatten the market data
-        const processedMarkets = data.markets.flatMap(event => {
-          if (!event.markets) return [];
-          
-          return event.markets.flatMap(market => {
-            if (!market.outcomePrices || market.closed) return [];
-            
-            const outcomes = JSON.parse(market.outcomePrices);
-            const marketOutcomes = JSON.parse(market.outcomes || '[]');
-            
-            // Compare the two outcomes and keep only the higher one
-            const price1 = parseFloat(outcomes[0]);
-            const price2 = parseFloat(outcomes[1]);
-            const higherIndex = price1 >= price2 ? 0 : 1;
-            const position = higherIndex === 0 ? 'Yes' : 'No';
-            
-            return [{
-              eventName: event.title,
-              marketName: market.groupItemTitle || 'Unknown',
-              position: position,
-              odds: parseFloat(outcomes[higherIndex]).toFixed(3),
-              endDate: market.endDate ? new Date(market.endDate).toLocaleString() : 'N/A',
-              volume: market.volume ? parseInt(market.volume).toLocaleString() : '0'
-            }];
-          });
-        });
-
-        setMarkets(processedMarkets);
-        setLoading(false);
-      } catch (err) {
-        setError(err.message);
-        setLoading(false);
+  const fetchMarkets = useCallback(async (pageNum) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/markets?page=${pageNum}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch market data');
       }
-    };
+      const data = await response.json();
+        
+      // Process and flatten the market data
+      const processedMarkets = data.markets.flatMap(event => {
+        if (!event.markets) return [];
+        
+        return event.markets.flatMap(market => {
+          if (!market.outcomePrices || market.closed) return [];
+          
+          let outcomes, marketOutcomes;
+          try {
+            outcomes = market.outcomePrices ? JSON.parse(market.outcomePrices) : [];
+            marketOutcomes = market.outcomes ? JSON.parse(market.outcomes) : [];
+          } catch (e) {
+            console.error('Error parsing market data:', e);
+            return [];
+          }
 
-    fetchMarkets();
+          if (!Array.isArray(outcomes) || outcomes.length < 2) return [];
+          
+          // Compare the two outcomes and keep only the higher one
+          const price1 = parseFloat(outcomes[0]) || 0;
+          const price2 = parseFloat(outcomes[1]) || 0;
+          const higherIndex = price1 >= price2 ? 0 : 1;
+          const position = higherIndex === 0 ? 'Yes' : 'No';
+          
+          return [{
+            eventName: event.title,
+            marketName: market.groupItemTitle || 'Unknown',
+            position: position,
+            odds: parseFloat(outcomes[higherIndex]).toFixed(3),
+            endDate: market.endDate ? new Date(market.endDate).toLocaleString() : 'N/A',
+            volume: market.volume ? parseInt(market.volume).toLocaleString() : '0'
+          }];
+        });
+      });
+
+      if (processedMarkets.length === 0) {
+        setHasMore(false);
+      } else {
+        setMarkets(prevMarkets => [...prevMarkets, ...processedMarkets]);
+        setPage(pageNum);
+      }
+      setLoading(false);
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchMarkets(1);
+  }, [fetchMarkets]);
 
   if (loading) return <div className="text-center p-4">Loading markets...</div>;
   if (error) return <div className="text-center p-4 text-red-500">Error: {error}</div>;
@@ -102,8 +118,27 @@ export default function MarketTable() {
     return '';
   };
 
+  const handleLoadMore = () => {
+    if (!loading && hasMore) {
+      fetchMarkets(page + 1);
+    }
+  };
+
   return (
     <div className="overflow-x-auto">
+      {/* <div className="mb-4 flex justify-end">
+        <button
+          onClick={handleLoadMore}
+          disabled={loading || !hasMore}
+          className={`px-4 py-2 text-sm font-medium rounded-md ${
+            loading || !hasMore
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-blue-600 text-white hover:bg-blue-700'
+          }`}
+        >
+          {loading ? 'Loading...' : hasMore ? 'Load More' : 'No More Data'}
+        </button>
+      </div> */}
       <table className="min-w-full bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
         <thead className="bg-gray-50 dark:bg-gray-700">
           <tr>

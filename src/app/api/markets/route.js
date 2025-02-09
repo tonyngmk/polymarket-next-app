@@ -40,20 +40,24 @@ async function fetchAllMarkets() {
     offset += limit;
     page += 1;
 
-    // Add 1 second delay before next request
-    await delay(1000);
+    // Add 0.1 second delay before next request
+    await delay(100);
   }
 
   return allData;
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
-    // Calculate date 5 days from now and format as YYYY-MM-DD
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page')) || 1;
+    const itemsPerPage = 10;
+    
+    // Calculate date 5 days from now
     const fiveDaysFromNow = new Date();
     fiveDaysFromNow.setDate(fiveDaysFromNow.getDate() + 5);
-    // const formattedDate = fiveDaysFromNow.toISOString().split('T')[0];
-    // Fetch all data from Polymarket API with pagination
+    
+    // Fetch data from Polymarket API
     const data = await fetchAllMarkets();
 
     // Filter events with markets ending within 5 days
@@ -70,9 +74,13 @@ export async function GET() {
       });
     });
 
-    // Return the filtered data with proper headers
+    // Paginate the filtered data
+    const startIndex = (page - 1) * itemsPerPage;
+    const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+
+    // Return the paginated data with proper headers
     return NextResponse.json(
-      { markets: filteredData },
+      { markets: paginatedData },
       {
         status: 200,
         headers: {
